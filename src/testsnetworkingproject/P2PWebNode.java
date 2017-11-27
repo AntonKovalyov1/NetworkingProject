@@ -8,8 +8,11 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.locks.Lock;
@@ -145,19 +148,42 @@ public class P2PWebNode {
                 }
                 if (reachInfo.getIpEndPoint() == ipEndpoint) {
                     File file = contentProvider.getFile(messageDigest);
-                    byte[] bytes = new byte[(int)file.length()];
                     FileInputStream fis = new FileInputStream(file);
-                    BufferedInputStream bis = new BufferedInputStream(fis);
-                    bis.read(bytes, 0, bytes.length);
-                    Headers headers = he.getResponseHeaders();
-                    headers.add("Content-Type", "image/png");
-                    he.sendResponseHeaders(OK, file.length());
-                    try (OutputStream os = he.getResponseBody()) {
-                        os.write(bytes, 0, bytes.length);
-                        os.close();
-                    }
+                    post(he, fis, reachInfo.getMetadata());
                 }
-                //TODO
+                connectToNodeAndPost(he, reachInfo);
+            }
+            
+            private void post(final HttpExchange he, 
+                             final InputStream is, 
+                             final Metadata metadata) 
+                    throws IOException {
+                byte[] bytes = new byte[(int)metadata.getContentLength()];
+                BufferedInputStream bis = new BufferedInputStream(is);
+                bis.read(bytes, 0, bytes.length);
+                Headers headers = he.getResponseHeaders();
+                headers.add("Content-Type", metadata.getContentType());
+                he.sendResponseHeaders(OK, metadata.getContentLength());
+                try (OutputStream os = he.getResponseBody()) {
+                    os.write(bytes, 0, bytes.length);
+                    os.close();   
+                }
+            }
+            
+            private void connectToNodeAndPost(final HttpExchange he, 
+                                              final ReachInfo reachInfo) 
+                    throws IOException {
+                IPEndpoint endPoint = reachInfo.getIpEndPoint();
+                Metadata metadata = reachInfo.getMetadata();
+                String url = "http://" + endPoint.getIp() + ":" + 
+                        endPoint.getPort() + "/" + metadata.getMessageDigest();
+                URL obj = new URL(url);
+                HttpURLConnection con = (HttpURLConnection)obj.openConnection();
+                if (con.getResponseCode() != OK) {
+                    notFound(he);
+                    return;
+                }
+                post(he, con.getInputStream(), metadata);
             }
 
             public void notFound(HttpExchange he) throws IOException {
@@ -168,6 +194,8 @@ public class P2PWebNode {
                     outputStream.close();
                 }
             }
+            
+            
         }
     }
 }

@@ -120,7 +120,7 @@ public class SimpleHttpServer {
         catch (Exception ex) {
             //System.out.println(ip);
         }
-        InetSocketAddress isa = new InetSocketAddress("192.168.1.72", 8000);
+        InetSocketAddress isa = new InetSocketAddress(8000);
         System.out.println(isa.getHostName());
         try {
             HttpServer httpServer = HttpServer.create(isa, 0);
