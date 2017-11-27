@@ -139,7 +139,7 @@ public class SimpleHttpServer {
  
         @Override
         public void handle(HttpExchange he) throws IOException {
-             
+            System.out.println("test"); 
             String response = "404 ERROR";
             he.sendResponseHeaders(responseCode_Not_Found, response.length());
              
