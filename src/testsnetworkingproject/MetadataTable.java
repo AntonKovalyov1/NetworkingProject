@@ -9,10 +9,10 @@ import java.util.HashMap;
 public class MetadataTable {
     
     private final long sequenceNumber;
-    private final HashMap<String, ReachableContent> data;
+    private final HashMap<String, ReachInfo> data;
     
     public MetadataTable(final long sequenceNumber, 
-                         final HashMap<String, ReachableContent> data) {
+                         final HashMap<String, ReachInfo> data) {
         this.sequenceNumber = sequenceNumber;
         this.data = data;
     }
@@ -32,7 +32,7 @@ public class MetadataTable {
     /**
      * @return the data
      */
-    public HashMap<String, ReachableContent> getData() {
+    public HashMap<String, ReachInfo> getData() {
         return data;
     }
 }

@@ -1,14 +1,19 @@
 package testsnetworkingproject;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  *
@@ -16,15 +21,26 @@ import java.util.Map;
  */
 public class P2PWebNode {
     
-    private final ContentProvider contentProvider = new ContentProvider();
-    private ContentTracker contentTracker;
-    private ClientGateway clientGateway;
+    private final IPEndpoint ipEndpoint;
+    private final ContentProvider contentProvider;
+    private final ContentTracker contentTracker;
+    private final ClientGateway clientGateway;
+    Lock lock = new ReentrantLock(true);
 
     public P2PWebNode(String ip, int port) {
+        this.ipEndpoint = new IPEndpoint(ip, port);
+        this.clientGateway = new ClientGateway();
+        this.contentProvider = new ContentProvider();
+        this.contentTracker = new ContentTracker();
+    }
+    
+    public void publish(String fileName) {
         
     }
     
     public class ContentTracker {
+        
+        private final HashMap<String, Providers> providersMap = new HashMap<>();
    
         public boolean peer(String hostname, int port) {
             //TODO
@@ -55,13 +71,11 @@ public class P2PWebNode {
             return null;
         }
         
-        private IPEndpoint getIPEndpoint(String messageDigest) {
-            Metadata local = contentProvider.getMetadata(messageDigest);
-            if (local == null) {
-                
-            }
-            //TODO
-            return null;
+        public ReachInfo getReachInfo(String messageDigest) {
+            Providers providers = providersMap.get(messageDigest);
+            if (providers == null)
+                return null;
+            return providers.getReachInfo(ipEndpoint);
         }
     }
     
@@ -96,12 +110,16 @@ public class P2PWebNode {
     
     public class ClientGateway {
         
-        public ClientGateway(final String hostname, final int port) {
-            init(hostname, port);
+        public static final int OK = 200;
+        public static final int NOT_FOUND = 404;
+        
+        public ClientGateway() {
+            init();
         }
         
-        private void init(final String hostname, final int port) {
-            InetSocketAddress isa = new InetSocketAddress(hostname, port);
+        private void init() {
+            InetSocketAddress isa = new InetSocketAddress(ipEndpoint.getIp(), 
+                                                          ipEndpoint.getPort());
             try {
                 HttpServer httpServer = HttpServer.create(isa, 0);
                 httpServer.createContext("/", new HttpRequestHandler());
@@ -117,14 +135,34 @@ public class P2PWebNode {
 
             @Override
             public void handle(HttpExchange he) throws IOException {
-                String s = he.getRequestURI().getPath().substring(1).
-                        toLowerCase();
-                
+                String messageDigest = he.getRequestURI().getPath().
+                        substring(1).toLowerCase();
+                ReachInfo reachInfo = contentTracker.getReachInfo(
+                        messageDigest);
+                if (reachInfo == null) {
+                    notFound(he);
+                    return;
+                }
+                if (reachInfo.getIpEndPoint() == ipEndpoint) {
+                    File file = contentProvider.getFile(messageDigest);
+                    byte[] bytes = new byte[(int)file.length()];
+                    FileInputStream fis = new FileInputStream(file);
+                    BufferedInputStream bis = new BufferedInputStream(fis);
+                    bis.read(bytes, 0, bytes.length);
+                    Headers headers = he.getResponseHeaders();
+                    headers.add("Content-Type", "image/png");
+                    he.sendResponseHeaders(OK, file.length());
+                    try (OutputStream os = he.getResponseBody()) {
+                        os.write(bytes, 0, bytes.length);
+                        os.close();
+                    }
+                }
+                //TODO
             }
 
             public void notFound(HttpExchange he) throws IOException {
-                String response = "404 ERROR";
-                he.sendResponseHeaders(404, response.length());
+                String response = NOT_FOUND + " ERROR";
+                he.sendResponseHeaders(NOT_FOUND, response.length());
                 try (OutputStream outputStream = he.getResponseBody()) {
                     outputStream.write(response.getBytes());
                     outputStream.close();
